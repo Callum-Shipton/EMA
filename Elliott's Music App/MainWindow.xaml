@@ -20,7 +20,7 @@
             <RowDefinition Height="160"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
-        <Button x:Name="LayerButton" Content="" HorizontalAlignment="Left" Margin="30,30,0,0" VerticalAlignment="Top" Width="100" Height="100" Click="Layer_Click" BorderThickness="0" IsHitTestVisible="True" IsEnabled="False">
+        <Button x:Name="LayerButton" Content="" HorizontalAlignment="Left" Margin="30,30,0,0" VerticalAlignment="Top" Width="100" Height="100" Click="Layer_Click" BorderThickness="0" IsHitTestVisible="True" IsEnabled="False" Style="{DynamicResource Button.Hoverless}">
             <Button.Background>
                 <ImageBrush ImageSource="assets/play.png"/>
             </Button.Background>
@@ -39,7 +39,7 @@
         <Button x:Name="LoadDanger" Content="Load" HorizontalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="0,50,0,0" Grid.Row="1" VerticalAlignment="Center" Background="{x:Null}" BorderBrush="White" Foreground="White" FontSize="20" FontWeight="Bold" BorderThickness="3" Click="Load_Danger_Click" Width="60" Grid.Column="3"/>
         <Button x:Name="Action" Content="Action" HorizontalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="0,7,0,0" Grid.Row="1" VerticalAlignment="Top" Background="{x:Null}" BorderBrush="White" Foreground="White" FontSize="30" FontWeight="Bold" BorderThickness="3" Width="149" Height="54" Click="Action_Click" IsEnabled="False" Grid.Column="4"/>
         <Button x:Name="LoadAction" Content="Load" HorizontalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="0,50,0,0" Grid.Row="1" VerticalAlignment="Center" Background="{x:Null}" BorderBrush="White" Foreground="White" FontSize="20" FontWeight="Bold" BorderThickness="3" Click="Load_Action_click" Width="60" Grid.Column="4"/>
-        <Button x:Name="StemButton" Content="" HorizontalAlignment="Left" Margin="30,30,0,0" VerticalAlignment="Top" Width="100" Height="100" Click="Stem_Click" BorderThickness="0" Grid.Row="2" IsEnabled="False">
+        <Button x:Name="StemButton" Content="" HorizontalAlignment="Left" Margin="30,30,0,0" VerticalAlignment="Top" Width="100" Height="100" Click="Stem_Click" BorderThickness="0" Grid.Row="2" IsEnabled="False" Style="{DynamicResource Button.Hoverless}">
             <Button.Background>
                 <ImageBrush ImageSource="assets/play.png"/>
             </Button.Background>
@@ -57,4 +57,50 @@
         <Button x:Name="D" Content="Mute D" HorizontalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="7,7,7,0" Grid.Row="3" VerticalAlignment="Top" Background="{x:Null}" BorderBrush="White" Foreground="White" FontSize="30" FontWeight="Bold" BorderThickness="3" Width="149" Height="54" Click="D_Click" IsEnabled="False" Grid.Column="4"/>
         <Button x:Name="LoadD" Content="Load" HorizontalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="51.5,70.5,51.5,20.5" Grid.Row="3" VerticalAlignment="Center" Background="{x:Null}" BorderBrush="White" Foreground="White" FontSize="20" FontWeight="Bold" BorderThickness="3" Click="Load_D_click" Width="60" Grid.Column="4"/>
     </Grid>
+    <Window.Resources>
+        <Style x:Key="Button.Hoverless" TargetType="{x:Type ButtonBase}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ButtonBase}">
+                        <Border Name="border"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="Selector.IsSelected" Value="False" />
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Background" Value="#FFBEE6FD" />
+                            </MultiTrigger>
+
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="Selector.IsSelected" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Background" Value="#BB90EE90" />
+                            </MultiTrigger>
+
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="False" />
+                                    <Condition Property="Selector.IsSelected" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Background" Value="LightGreen" />
+                            </MultiTrigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.95" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 </Window>

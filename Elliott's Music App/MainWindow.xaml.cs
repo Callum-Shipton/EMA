@@ -89,6 +89,7 @@ namespace Elliott_s_Music_App
         {
             InitializeComponent(); // Initiales XAML for main window
 
+            // NEEEEEEEEEEDS MOVING OUT
 
             dev = new Device(); // Creates new Audio device 
 
@@ -98,6 +99,8 @@ namespace Elliott_s_Music_App
             dev.SetCooperativeLevel(winHelp.Handle, CooperativeLevel.Priority);  // Uses the window handle to allow for multiple secondary buffers 
             bf = new BufferDescription();
             bf.ControlVolume = true; // Sets buffers to be allowed to change volume dynamically using buffer description.
+
+            // END OF NEEEEEEEEEDS MOVING OUT
 
             RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.Fant); // Improves rendering quality of play and pause button
 

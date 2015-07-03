@@ -18,6 +18,7 @@ using System.Windows.Interop;
 using System.Windows.Markup;
 using Microsoft.DirectX.AudioVideoPlayback;
 using System.Windows.Threading;
+using Elliotts_Music_App;
 
 namespace Elliott_s_Music_App
 {
@@ -26,64 +27,38 @@ namespace Elliott_s_Music_App
     /// </summary>
     public partial class MainWindow : Window
     {
-
-        DispatcherTimer layerTimer; // Timer to updates the layer sliders position to the current layers postion and to check/handle the fading between layers every 5 milliseconds
-        bool layerIsDragging = false; // Boolean to stop slider position from updating while the slider is being dragged.
-        bool layerFading = false; // Boolean to determine whether fading is happening between the old layer and the current layer
-        private double layerCrossElapsed = 0; // Time elapsed during current fading to determine the next volume to set the layers at. 
+        DispatcherTimer layerTimer;
+        bool layerIsDragging = false; // ^^
 
         DispatcherTimer stemTimer; // See above but for stems
         bool stemIsDragging = false; // ^^
-        private double stemCrossElapsed = 0; // ^^
 
-        TimeSpan crossTime = new TimeSpan(0,0,0,0,2500); // Variable to hold the total time for the crossfade (can be changed with the text in the GUI). Default is 2.5 seconds
- 
+        public static TimeSpan crossTime = new TimeSpan(0,0,0,0,2500); // Variable to hold the total time for the crossfade (can be changed with the text in the GUI). Default is 2.5 seconds
 
         private Device dev; // Device handler for audio ouptut
         private BufferDescription bf; // Describes the SecondaryBuffers to allow volume control during playback
 
-        private SecondaryBuffer l1; // Buffer to hold the data for Layer 1 (minimal)
-        private SecondaryBuffer l2; // Buffer to hold the data for Layer 2 (Tension)
-        private SecondaryBuffer l3; // Buffer to hold the data for Layer 3 (Danger)
-        private SecondaryBuffer l4; // Buffer to hold the data for Layer 4 (Action)
-        private SecondaryBuffer currentLayer; // Reference to the current layer playing
-        private SecondaryBuffer oldLayer; // Reference to the last layer to allow fading out
+        private Layer l1; // Buffer to hold the data for Layer 1 (minimal)
+        private Layer l2; // Buffer to hold the data for Layer 2 (Tension)
+        private Layer l3; // Buffer to hold the data for Layer 3 (Danger)
+        private Layer l4; // Buffer to hold the data for Layer 4 (Action)
+        private Layer currentLayer;
 
-        private SecondaryBuffer s1;  // Buffer to hold the data for Stem A
-        private SecondaryBuffer s2; // Buffer to hold the data for Stem B
-        private SecondaryBuffer s3; // Buffer to hold the data for Stem C
-        private SecondaryBuffer s4; // Buffer to hold the data for Stem D
-
-        bool aSelect = false; // Boolean to hold whether stem A is selected (for GUI changing)
-        bool bSelect = false;// ^^ B
-        bool cSelect = false;// ^^ C
-        bool dSelect = false;// ^^ D
-
-        bool aFadeIn = false; // Boolean for storing if stem A is currently fading in
-        bool bFadeIn = false;// ^^ B
-        bool cFadeIn = false;// ^^ C
-        bool dFadeIn = false;// ^^ D
-
-        bool aFadeOut = false;// Boolean for storing if stem A is currently fading out
-        bool bFadeOut = false;// ^^ B
-        bool cFadeOut = false;// ^^ C
-        bool dFadeOut = false;// ^^ D
+        private Stem s1;  // Buffer to hold the data for Stem A
+        private Stem s2; // Buffer to hold the data for Stem B
+        private Stem s3; // Buffer to hold the data for Stem C
+        private Stem s4; // Buffer to hold the data for Stem D
 
         bool layerPlaying = false; // If a layer is currently playing 
         bool stemPlaying = false; // If all the stems are currently playing
-
-        bool minSelect = false;  // Boolean to hold whether Minimal is selected (for GUI changing) and also to determine which layer to fade out (previously selected).
-        bool tenSelect = false;  // ^^ Tension
-        bool danSelect = false; // ^^ Danger
-        bool actSelect = false; // ^^ Action
 
         ImageSource play = new BitmapImage(new Uri("Assets/play.png", UriKind.Relative)); // ImageSource for changing between play and pause images
         ImageSource pause = new BitmapImage(new Uri("Assets/pause.png", UriKind.Relative));
         ImageBrush iPlay; // Brushes to change between play and pause images
         ImageBrush iPause;
 
-        SolidColorBrush WhiteFill = new SolidColorBrush(Colors.White); // Brushes to change reverse the colors when things are selected and deselected
-        SolidColorBrush BlackFill = new SolidColorBrush(Color.FromRgb(34,34,34));
+        public static SolidColorBrush WhiteFill = new SolidColorBrush(Colors.White); // Brushes to change reverse the colors when things are selected and deselected
+        public static SolidColorBrush BlackFill = new SolidColorBrush(Color.FromRgb(34,34,34));
 
         public MainWindow()
         {
@@ -107,15 +82,16 @@ namespace Elliott_s_Music_App
             iPlay = new ImageBrush(play); // Initialise play and pause button brushes
             iPause = new ImageBrush(pause);
 
-            layerTimer = new DispatcherTimer(); // Intitalises timer for every 5 milliseconds to call layer_tick. DOES NOT START TIMER YET
-            layerTimer.Interval = TimeSpan.FromMilliseconds(5);
-            layerTimer.Tick += new EventHandler(layer_Tick);
-
             layerSeek.Maximum = 0; // Sets slider maximum to 0, changes later when layers are added and the length can be determined
 
             stemTimer = new DispatcherTimer(); // Intitalises timer for every 5 milliseconds to call stem_tick. DOES NOT START TIMER YET  
-            stemTimer.Interval = TimeSpan.FromMilliseconds(5);
+            stemTimer.Interval = TimeSpan.FromMilliseconds(30);
             stemTimer.Tick += new EventHandler(stem_Tick);
+
+            layerTimer = new DispatcherTimer();
+            layerTimer.Interval = TimeSpan.FromMilliseconds(30);
+            layerTimer.Tick += new EventHandler(layer_Tick);
+
             stemSeek.Maximum = 0;  // Sets slider maximum to 0, changes later when stems are added and the length can be determined
 
         }
@@ -125,28 +101,11 @@ namespace Elliott_s_Music_App
         {
             if (!stemIsDragging)
             {
-                //Gets the first stem buffer that isnt empty and determines the current position (in secondds) and sets the sliders position to it.
-                if(s1!=null)stemSeek.Value = s1.PlayPosition * 1.0f / ((s1.Format.BitsPerSample / 8) * s1.Format.SamplesPerSecond * s1.Format.Channels);
-                else if (s2 != null) stemSeek.Value = s2.PlayPosition * 1.0f / ((s2.Format.BitsPerSample / 8) * s2.Format.SamplesPerSecond * s2.Format.Channels);
-                else if (s3 != null) stemSeek.Value = s3.PlayPosition * 1.0f / ((s3.Format.BitsPerSample / 8) * s3.Format.SamplesPerSecond * s3.Format.Channels);
-                else if (s4 != null) stemSeek.Value = s4.PlayPosition * 1.0f / ((s4.Format.BitsPerSample / 8) * s4.Format.SamplesPerSecond * s4.Format.Channels);
-            }
-            // Calles the fading on each of the stems if they are fading
-            if (aFadeIn || aFadeOut)
-            {
-                StemFade(s1,ref aFadeIn, ref aFadeOut);
-            }
-            if (bFadeIn || bFadeOut)
-            {
-                StemFade(s2,ref bFadeIn, ref bFadeOut);
-            }
-            if (cFadeIn || cFadeOut)
-            {
-                StemFade(s3,ref cFadeIn, ref cFadeOut);
-            }
-            if (dFadeIn || dFadeOut)
-            {
-                StemFade(s4,ref dFadeIn, ref dFadeOut);
+                //Gets the first stem buffer that isnt empty and determines the current position (in seconds) and sets the sliders position to it.
+                if (s1 != null) stemSeek.Value = s1.getPosition();
+                else if (s2 != null) stemSeek.Value = s2.getPosition();
+                else if (s3 != null) stemSeek.Value = s3.getPosition();
+                else if (s4 != null) stemSeek.Value = s4.getPosition();
             }
         }
 
@@ -167,21 +126,27 @@ namespace Elliott_s_Music_App
             layerPlaying = !layerPlaying;
         }
 
-        // Pauses all layers (maybe should pause the timer if that's possible? )
-        private void stopLayer()
-        {
-            if(l1!= null) l1.Stop();
-            if(l2!=null) l2.Stop();
-            if(l3!=null) l3.Stop();
-            if(l4!=null) l4.Stop();
-        }
 
         // Plays current layer (starts timer if hasn't started yet)
         private void playLayer()
         {
             if (!layerTimer.IsEnabled) layerTimer.Start();
-            currentLayer.Play(0, BufferPlayFlags.Looping);
+            if (l1 != null) l1.play();
+            if (l2 != null) l2.play();
+            if (l3 != null) l3.play();
+            if (l4 != null) l4.play();
         }
+
+        // Pauses all layers (maybe should pause the timer if that's possible? )
+        private void stopLayer()
+        {
+            if (layerTimer.IsEnabled) layerTimer.Stop();
+            if(l1!= null) l1.stop();
+            if(l2!= null) l2.stop();
+            if(l3!= null) l3.stop();
+            if(l4!= null) l4.stop();
+        }
+
 
         // If the stem play button is clicked this is called. Toggles the playing of the stems and stops layers from playing also.
         private void Stem_Click(object sender, RoutedEventArgs e)
@@ -200,178 +165,70 @@ namespace Elliott_s_Music_App
             stemPlaying = !stemPlaying;
         }
 
-        // Pauses all stems (maybe same timer thing as layers?)
-        private void stopStem()
-        {
-            if (s1 != null) s1.Stop();
-            if (s2 != null) s2.Stop();
-            if (s3 != null) s3.Stop();
-            if (s4 != null) s4.Stop();
-        }
-        
         // Plays all loaded stems (all stem buffer plays even when muted (like the website))
         private void playStem()
         {
             if (!stemTimer.IsEnabled) stemTimer.Start();
-            if (s1 != null) s1.Play(0, BufferPlayFlags.Looping);
-            if (s2 != null) s2.Play(0, BufferPlayFlags.Looping);
-            if (s3 != null) s3.Play(0, BufferPlayFlags.Looping);
-            if (s4 != null) s4.Play(0, BufferPlayFlags.Looping);
+            if (s1 != null) s1.play();
+            if (s2 != null) s2.play();
+            if (s3 != null) s3.play();
+            if (s4 != null) s4.play();
         }
+
+        // Pauses all stems (maybe same timer thing as layers?)
+        private void stopStem()
+        {
+            if (stemTimer.IsEnabled) stemTimer.Stop();
+            if (s1 != null) s1.stop();
+            if (s2 != null) s2.stop();
+            if (s3 != null) s3.stop();
+            if (s4 != null) s4.stop();
+        }
+        
+
 
         // Handles the clicking of the minimal button
         private void Minimal_Click(object sender, RoutedEventArgs e)
-        { 
-            if (!minSelect)
-            {
-                Minimal.Background = WhiteFill;
-                Minimal.Foreground = BlackFill;
-                minSelect = true;
-                if (layerPlaying)
-                {
-                        //If a layer is currently playing (we know it's not this one because !minselect, then fade this in and fade the currentlayer out
-                        LayerFade(l1);
-
-                        // Also, click the other button for us to deslect it and toggle GUI
-                        if (tenSelect)
-                        {
-                            Tension_Click(sender, e);
-                        }
-                        if (danSelect)
-                        {
-                            Danger_Click(sender, e);
-                        }
-                        if (actSelect)
-                        {
-                            Action_Click(sender, e);
-                        }
-                }
-                else // No need to fade if layer switches while paused? (maybe old layer need updating?)
-                {
-                    currentLayer = l1;
-                }
-                LayerButton.IsEnabled = true; // Only allow layer play button to be clickable when a layer is selected
-            }
-            else if(sender != Minimal) // Handles the other layer buttons clicking this button to deselect it as mentioned above 
-            {
-                Minimal.Background = BlackFill;
-                Minimal.Foreground = WhiteFill;
-                minSelect = false;
-            }
+        {
+            l1.select(layerSeek.Value, layerPlaying);
+            if (l2 != null)l2.deselect(layerPlaying);
+            if (l3 != null) l3.deselect(layerPlaying);
+            if (l4 != null) l4.deselect(layerPlaying);
+            currentLayer = l1;
+            LayerButton.IsEnabled = true; // Only allow layer play button to be clickable when a layer is selected
         }
 
         //See Minimal_Click
         private void Tension_Click(object sender, RoutedEventArgs e)
         {
-            if (!tenSelect)
-            {
-                Tension.Background = WhiteFill;
-                Tension.Foreground = BlackFill;
-                tenSelect = true;
-                if (layerPlaying)
-                {
-                    LayerFade(l2);
-                    if (minSelect)
-                    {
-                        Minimal_Click(sender, e);
-                    }
-                    if (danSelect)
-                    {
-                        Danger_Click(sender, e);
-                    }
-                    if (actSelect)
-                    {
-                        Action_Click(sender, e);
-                    }
-                }
-                else
-                {
-                    currentLayer = l2;
-                }
-                LayerButton.IsEnabled = true;
-            }
-            else if (sender != Tension)
-            {
-                Tension.Background = BlackFill;
-                Tension.Foreground = WhiteFill;
-                tenSelect = false;
-            }
+            l2.select(layerSeek.Value, layerPlaying);
+            if (l1 != null) l1.deselect(layerPlaying);
+            if (l3 != null) l3.deselect(layerPlaying);
+            if (l4 != null)l4.deselect(layerPlaying);
+            currentLayer = l2;
+            LayerButton.IsEnabled = true; // Only allow layer play button to be clickable when a layer is selected
         }
 
         // See Minimal_click
         private void Danger_Click(object sender, RoutedEventArgs e)
         {
-            if (!danSelect)
-            {
-                Danger.Background = WhiteFill;
-                Danger.Foreground = BlackFill;
-                danSelect = true;
-                if (layerPlaying)
-                {
-                    LayerFade(l3);
-                    if (tenSelect)
-                    {
-                        Tension_Click(sender, e);
-                    }
-                    if (minSelect)
-                    {
-                        Minimal_Click(sender, e);
-                    }
-                    if (actSelect)
-                    {
-                        Action_Click(sender, e);
-                    }
-                }
-                else
-                {
-                    currentLayer = l3;
-                }
-                LayerButton.IsEnabled = true;
-            }
-            else if (sender != Danger)
-            {
-                Danger.Background = BlackFill;
-                Danger.Foreground = WhiteFill;
-                danSelect = false;
-            }
+            l3.select(layerSeek.Value, layerPlaying);
+            if (l1 != null) l1.deselect(layerPlaying);
+            if (l2 != null) l2.deselect(layerPlaying);
+            if (l4 != null) l4.deselect(layerPlaying);
+            currentLayer = l3;
+            LayerButton.IsEnabled = true; // Only allow layer play button to be clickable when a layer is selected
         }
 
         // See Minimal_click
         private void Action_Click(object sender, RoutedEventArgs e)
         {
-            if (!actSelect)
-            {
-                Action.Background = WhiteFill;
-                Action.Foreground = BlackFill;
-                actSelect = true;
-                if (layerPlaying)
-                {
-                    LayerFade(l4);
-                    if (tenSelect)
-                    {
-                        Tension_Click(sender, e);
-                    }
-                    if (danSelect)
-                    {
-                        Danger_Click(sender, e);
-                    }
-                    if (minSelect)
-                    {
-                        Minimal_Click(sender, e);
-                    }
-                }
-                else
-                {
-                    currentLayer = l4;
-                }
-                LayerButton.IsEnabled = true;
-            }
-            else if (sender != Action)
-            {
-                Action.Background = BlackFill;
-                Action.Foreground = WhiteFill;
-                actSelect = false;
-            }
+            l4.select(layerSeek.Value, layerPlaying);
+            if (l1 != null) l1.deselect(layerPlaying);
+            if (l2 != null) l2.deselect(layerPlaying);
+            if (l3 != null) l3.deselect(layerPlaying);
+            currentLayer = l4;
+            LayerButton.IsEnabled = true; // Only allow layer play button to be clickable when a layer is selected
         }
 
         //Loads minimal wav. Sets the sliders maximum to maximum layer length
@@ -390,9 +247,8 @@ namespace Elliott_s_Music_App
             { 
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a1 = Audio.FromFile(filename,false);
-                if(layerSeek.Maximum < a1.Duration) layerSeek.Maximum = a1.Duration;
-                l1 = new SecondaryBuffer(filename, bf, dev);
+                l1 = new Layer(filename, bf, dev, ref Minimal);
+                if(layerSeek.Maximum < l1.Length) layerSeek.Maximum = l1.Length;
                 Minimal.IsEnabled = true;
             }
         }
@@ -412,9 +268,8 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a2 = Audio.FromFile(filename, false);
-                if (layerSeek.Maximum < a2.Duration) layerSeek.Maximum = a2.Duration;
-                l2 = new SecondaryBuffer(filename, bf, dev);
+                l2 = new Layer(filename, bf, dev, ref Tension);
+                if (layerSeek.Maximum < l2.Length) layerSeek.Maximum = l2.Length;
                 //Load wav from filename;
                 Tension.IsEnabled = true;
             }
@@ -435,9 +290,8 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a3 = Audio.FromFile(filename, false);
-                if (layerSeek.Maximum < a3.Duration) layerSeek.Maximum = a3.Duration;
-                l3 = new SecondaryBuffer(filename, bf, dev);
+                l3 = new Layer(filename, bf, dev, ref Danger);
+                if (layerSeek.Maximum < l3.Length) layerSeek.Maximum = l3.Length;
                 //Load wav from filename;
                 Danger.IsEnabled = true;
             }
@@ -458,43 +312,18 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a4 = Audio.FromFile(filename, false);
-                if (layerSeek.Maximum < a4.Duration) layerSeek.Maximum = a4.Duration;
-                l4 = new SecondaryBuffer(filename, bf, dev);
+                l4 = new Layer(filename, bf, dev, ref Action);
+                if (layerSeek.Maximum < l4.Length) layerSeek.Maximum = l4.Length;
                 //Load wav from filename;
                 Action.IsEnabled = true;
             }
         }
 
-        //Handles layer slider updating and fading
+        //Handles layer slider updating
         void layer_Tick (object sender, EventArgs e)
-        { 
+        {
             if(!layerIsDragging){
-                layerSeek.Value = currentLayer.PlayPosition * 1.0f/((currentLayer.Format.BitsPerSample/8) * currentLayer.Format.SamplesPerSecond * currentLayer.Format.Channels);
-            }
-            if (layerFading)
-            {
-                layerCrossElapsed += layerTimer.Interval.TotalMilliseconds;
-                if (layerCrossElapsed < crossTime.TotalMilliseconds)
-                {
-
-                    double vol = (1000 * Math.Log10(layerCrossElapsed / crossTime.TotalMilliseconds));
-                    if (vol < -10000 || double.IsNaN(vol)) vol = -10000;
-                    if (vol > 0) vol = 0;
-                    currentLayer.Volume = (int)vol;
-                    vol = (1000 * Math.Log10(1-(layerCrossElapsed / crossTime.TotalMilliseconds)));
-                    if (vol < -10000 || double.IsNaN(vol)) vol = -10000;
-                    if (vol > 0) vol = 0;
-                    oldLayer.Volume = (int)vol;
-                }
-                else
-                {
-                    oldLayer.Volume = -10000;
-                    currentLayer.Volume = 0;
-                    layerFading = false;
-                    oldLayer.Stop();
-                    layerCrossElapsed = 0;
-                }
+                layerSeek.Value = currentLayer.getPosition();
             }
         }
 
@@ -508,58 +337,11 @@ namespace Elliott_s_Music_App
         private void layerSeek_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             layerIsDragging = false;
-            currentLayer.SetCurrentPosition((int)(layerSeek.Value) * currentLayer.Format.SamplesPerSecond * currentLayer.Format.Channels * (currentLayer.Format.BitsPerSample/8));
-        }
-
-        // Starts layer fading/ Playing next layer
-        private void LayerFade(SecondaryBuffer l1)
-        {
-            l1.SetCurrentPosition(currentLayer.PlayPosition);
-            l1.Volume = -10000;
-            l1.Play(0, BufferPlayFlags.Looping);
-            layerFading = true;
-            oldLayer = currentLayer;
-            currentLayer = l1;
+            stopLayer();
+            currentLayer.play(layerSeek.Value);
+            layerTimer.Start();
         }
         
-        // Handles stem fading
-        private void StemFade(SecondaryBuffer s1, ref bool fadeIn, ref bool fadeOut)
-        {
-            stemCrossElapsed += stemTimer.Interval.TotalMilliseconds;
-            if (stemCrossElapsed < crossTime.TotalMilliseconds)
-            {
-                double vol;
-                if (fadeIn)
-                {
-                    vol = (2000 * Math.Log10(stemCrossElapsed / crossTime.TotalMilliseconds));
-                    if (vol < -10000 || double.IsNaN(vol)) vol = -10000;
-                    if (vol > 0) vol = 0;
-                    s1.Volume = (int)vol;
-                }
-                else if(fadeOut)
-                {
-                    vol = (2000 * Math.Log10(1 - (stemCrossElapsed / crossTime.TotalMilliseconds)));
-                    if (vol < -10000 || double.IsNaN(vol)) vol = -10000;
-                    if (vol > 0) vol = 0;
-                    s1.Volume = (int)vol;
-                }
-            }
-            else // Fading has finished, turns volume to 0 (Full) or -10000 (Silent)
-            {
-                stemCrossElapsed = 0;
-                if (fadeIn)
-                {
-                    s1.Volume = 0;
-                    fadeIn = false;
-                }
-                else if (fadeOut)
-                {
-                    s1.Volume = -10000;
-                    fadeOut = false;
-                }
-            }
-
-        }
 
         // Updates crossfade time when textbox gets enter key (maybe needs better handling for when to update)?
         private void crossVar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -586,14 +368,16 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a1 = Audio.FromFile(filename, false);
-                if (stemSeek.Maximum < a1.Duration) stemSeek.Maximum = a1.Duration;
-                s1 = new SecondaryBuffer(filename, bf, dev);
+                s1 = new Stem(filename, bf, dev, ref A);
+                if (stemSeek.Maximum < s1.Length) stemSeek.Maximum = s1.Length;
                 A.IsEnabled = true;
                 StemButton.IsEnabled = true;
                 A.Background = WhiteFill;
                 A.Foreground = BlackFill;
-                aSelect = true;
+                if (stemPlaying)
+                {
+                    s1.play();
+                }
             }
         }
         // ^^
@@ -612,14 +396,16 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a1 = Audio.FromFile(filename, false);
-                if (stemSeek.Maximum < a1.Duration) stemSeek.Maximum = a1.Duration;
-                s2 = new SecondaryBuffer(filename, bf, dev);
+                s2 = new Stem(filename, bf, dev, ref B);
+                if (stemSeek.Maximum < s2.Length) stemSeek.Maximum = s2.Length;
                 B.IsEnabled = true;
                 StemButton.IsEnabled = true;
                 B.Background = WhiteFill;
                 B.Foreground = BlackFill;
-                bSelect = true;
+                if (stemPlaying)
+                {
+                    s2.play();
+                }
             }
         }
 
@@ -638,14 +424,16 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a1 = Audio.FromFile(filename, false);
-                if (stemSeek.Maximum < a1.Duration) stemSeek.Maximum = a1.Duration;
-                s3 = new SecondaryBuffer(filename, bf, dev);
+                s3 = new Stem(filename, bf, dev, ref C);
+                if (stemSeek.Maximum < s3.Length) stemSeek.Maximum = s3.Length;
                 C.IsEnabled = true;
                 StemButton.IsEnabled = true;
                 C.Background = WhiteFill;
                 C.Foreground = BlackFill;
-                cSelect = true;
+                if (stemPlaying)
+                {
+                    s3.play();
+                }
             }
         }
 
@@ -664,121 +452,38 @@ namespace Elliott_s_Music_App
             {
                 // Open document 
                 string filename = dlg.FileName;
-                Audio a1 = Audio.FromFile(filename, false);
-                if (stemSeek.Maximum < a1.Duration) stemSeek.Maximum = a1.Duration;
-                s4 = new SecondaryBuffer(filename, bf, dev);
+                s4 = new Stem(filename, bf, dev, ref D);
+                if (stemSeek.Maximum < s4.Length) stemSeek.Maximum = s4.Length;
                 D.IsEnabled = true;
                 StemButton.IsEnabled = true;
                 D.Background = WhiteFill;
                 D.Foreground = BlackFill;
-                dSelect = true;
+                if (stemPlaying)
+                {
+                    s4.play();
+                }
             }
         }
 
         // Handles toggling of stem A, and enables boolean for fade (All stems are all playing while pause is false, they are just silent, fading or max.)
         private void A_Click(object sender, RoutedEventArgs e)
         {
-            if (!aSelect)
-            {
-                A.Background = WhiteFill;
-                A.Foreground = BlackFill;
-                A.Content = "Mute A";
-                aSelect = true;
-                if (stemPlaying)
-                {
-                    aFadeIn = true;
-                }
-            }
-            else
-            {
-                A.Background = BlackFill;
-                A.Foreground = WhiteFill;
-                A.Content = "Unmute A";
-                aSelect = false;
-                if (stemPlaying)
-                {
-                    aFadeOut = true;
-                }
-            }
+            s1.select(stemSeek.Value, stemPlaying);
         }
 
         private void B_Click(object sender, RoutedEventArgs e)
         {
-            if (!bSelect)
-            {
-                B.Background = WhiteFill;
-                B.Foreground = BlackFill;
-                B.Content = "Mute B";
-                bSelect = true;
-                if (stemPlaying)
-                {
-
-                    bFadeIn = true;
-                }
-            }
-            else
-            {
-                B.Background = BlackFill;
-                B.Foreground = WhiteFill;
-                B.Content = "Unmute B";
-                bSelect = false;
-                if (stemPlaying)
-                {
-                    bFadeOut = true;
-                }
-            }
+            s2.select(stemSeek.Value, stemPlaying);
         }
 
         private void C_Click(object sender, RoutedEventArgs e)
         {
-            if (!cSelect)
-            {
-                C.Background = WhiteFill;
-                C.Foreground = BlackFill;
-                C.Content = "Mute C";
-                cSelect = true;
-                if (stemPlaying)
-                {
-                    cFadeIn = true;
-                }
-            }
-            else
-            {
-                C.Background = BlackFill;
-                C.Foreground = WhiteFill;
-                C.Content = "Unmute C";
-                cSelect = false;
-                if (stemPlaying)
-                {
-                    cFadeOut = true;
-                }
-            }
+            s3.select(stemSeek.Value, stemPlaying);
         }
 
         private void D_Click(object sender, RoutedEventArgs e)
         {
-            if (!dSelect)
-            {
-                D.Background = WhiteFill;
-                D.Foreground = BlackFill;
-                D.Content = "Mute D";
-                dSelect = true;
-                if (stemPlaying)
-                {
-                    dFadeIn = true;
-                }
-            }
-            else
-            {
-                D.Background = BlackFill;
-                D.Foreground = WhiteFill;
-                D.Content = Content = "Unmute D";
-                dSelect = false;
-                if (stemPlaying)
-                {
-                    dFadeOut = true;
-                }
-            }
+            s4.select(stemSeek.Value, stemPlaying);
         }
 
 
@@ -792,10 +497,12 @@ namespace Elliott_s_Music_App
         private void stemSeek_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             stemIsDragging = false;
-            if(s1!=null)s1.SetCurrentPosition((int)(stemSeek.Value) * s1.Format.SamplesPerSecond * s1.Format.Channels * (s1.Format.BitsPerSample / 8));
-            if(s2!=null)s2.SetCurrentPosition((int)(stemSeek.Value) * s2.Format.SamplesPerSecond * s2.Format.Channels * (s2.Format.BitsPerSample / 8));
-            if(s3!=null)s3.SetCurrentPosition((int)(stemSeek.Value) * s3.Format.SamplesPerSecond * s3.Format.Channels * (s3.Format.BitsPerSample / 8));
-            if(s4!=null)s4.SetCurrentPosition((int)(stemSeek.Value) * s4.Format.SamplesPerSecond * s4.Format.Channels * (s4.Format.BitsPerSample / 8));
+            stopStem();
+            if (s1 != null) s1.play(stemSeek.Value);
+            if (s2 != null) s2.play(stemSeek.Value);
+            if (s3 != null) s3.play(stemSeek.Value);
+            if (s4 != null) s4.play(stemSeek.Value);
+            stemTimer.Start();
         }
     }
 }
